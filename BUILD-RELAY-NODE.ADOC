@@ -1,0 +1,148 @@
+# Build a Cardano Relay Node
+The directions below will instruct you on how to build a Cardano Relay Node.  These directions as designed with Debian Buster as the base OS. These directions also assume cardano-cli and cardano-node have been installed to /usr/local/bin and all dependencies have been installed.
+
+## Update the Operating System
+```
+apt upgrade -y
+apt dist-upgrade -y
+apt update -y
+apt autoremove -y
+shutdown -r now
+```
+## Configure Swap Space
+```
+swapon --show
+fallocate -l 10G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+swapon --show
+shutdown -r now
+swapon --show
+```
+
+## Add Cardano User
+```
+adduser \
+    --system \
+    --shell /bin/bash \
+    --gecos 'Cardano Node' \
+    --group \
+    --disabled-password \
+    --home /home/cardano \
+    cardano
+```
+
+## Verify Cardano node files are installed
+```
+cardano-cli version
+cardano-node version
+```
+## Create Config & Database Folders
+```
+mkdir -p /etc/cardano/
+mkdir -p /var/lib/cardano/
+mkdir -p /tmp/cardano/
+chown cardano:cardano /tmp/cardano
+chown cardano:cardano /var/lib/cardano
+```
+
+## Create Configuration Files
+```
+mkdir -p ~/src
+cd ~/src
+git clone https://github.com/input-output-hk/cardano-node.git
+cp -R ~/src/cardano-node/configuration/cardano/* /etc/cardano/
+rm -rf ~/src
+```
+### Modify Topology File
+Modify /etc/cardano/mainnet-topology.json to reflect only the following lines
+```
+{
+  "Producers": [
+    {
+      "addr": "your-cardano-producer.domain.com",
+      "port": 4020,
+      "valency": 1
+    },
+    {
+      "addr": "relays-new.cardano-mainnet.iohk.io",
+      "port": 3001,
+      "valency": 4
+    }
+  ]
+}
+
+```
+
+### Set Config Permissions
+```
+chown -R cardano:cardano /etc/cardano
+```
+
+## Node Startup Files
+
+### Create Relay Node Startup Script
+
+```
+touch /usr/local/bin/cardano-relay-start.sh
+chmod 755 /usr/local/bin/cardano-relay-start.sh
+```
+
+Add the following to /usr/local/bin/cardano-relay-start.sh
+```
+#!/bin/bash
+mkdir -p /tmp/cardano/
+chown cardano:cardano /tmp/cardano
+
+export CARDANO_NODE_SOCKET_PATH="/tmp/cardano/cardano-node.socket"
+/usr/local/bin/cardano-node run \
+--topology /etc/cardano/mainnet-topology.json \
+--database-path /var/lib/cardano \
+--socket-path /tmp/cardano/cardano-node.socket \
+--host-addr 0.0.0.0 \
+--port 4020 \
+--config /etc/cardano/mainnet-config.json
+```
+
+### Setup systemd startup
+Create the file /etc/systemd/system/cardano-node.service with the following contents
+```
+# The Cardano node service (part of systemd)
+# file: /etc/systemd/system/cardano-node.service 
+
+[Unit]
+Description     = Cardano node service
+Wants           = network-online.target
+After           = network-online.target 
+
+[Service]
+User            = cardano
+Type            = simple
+WorkingDirectory= /home/cardano
+ExecStart       = /bin/bash -c '/usr/local/bin/cardano-relay-start.sh'
+KillSignal=SIGINT
+RestartKillSignal=SIGINT
+TimeoutStopSec=5
+LimitNOFILE=32768
+Restart=always
+RestartSec=7
+
+[Install]
+WantedBy= multi-user.target
+```
+
+## Start Relay Node
+```
+systemctl daemon-reload
+systemctl enable cardano-node --now
+```
+## Verify Successful Startup
+```
+journalctl -u cardano -f
+```
+
+
+Cardano Notebook (c) by https://poweredbycrypto.com/[Powered By Crypto LLC], and other contributors.
+This document is licensed under a https://creativecommons.org/licenses/by-sa/4.0/[Creative Commons Attribution-ShareAlike 4.0 International Public License (CC BY-SA 4.0)].
