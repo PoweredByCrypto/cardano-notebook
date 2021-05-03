@@ -1,0 +1,101 @@
+# Build Cardano Node Binaries
+The directions below will instruct you on how to build and install Cardano Binaries on Debian 10 (Buster).
+
+## Update the Operating System
+```
+apt upgrade -y
+apt dist-upgrade -y
+apt update -y
+apt autoremove -y
+shutdown -r now
+```
+
+## Install Haskell
+
+### Edit Apt Sources
+```
+apt edit-sources
+```
+Add the following lines to the sources:
+```
+#GHC https://downloads.haskell.org/debian/
+deb http://downloads.haskell.org/debian buster main
+```
+
+### Register GPG Signing Key
+```
+apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys BA3CBA3FFE22B574
+```
+
+### Install Cabal and GHC
+```
+apt update
+apt install cabal-install-3.4 ghc-8.10.2
+```
+#### Set Evironment Path
+Add the following to ~/.bashrc
+```
+export PATH="/opt/ghc/bin:$PATH"
+```
+Load Changes
+```
+source ~/.bashrc
+```
+
+## Install Dependencies
+
+### Install Libsodium
+```
+apt install libsodium-dev libsodium23
+```
+
+### Install Build Dependencies
+```
+apt install automake build-essential pkg-config libffi-dev libgmp-dev libssl-dev libtinfo-dev libsystemd-dev zlib1g-dev make g++ tmux git jq wget libncursesw5 libtool autoconf libsodium-dev -y
+```
+
+## Download and Compile Node
+
+### Download Node Source
+```
+mkdir -p ~/src
+cd ~/src
+git clone https://github.com/input-output-hk/cardano-node.git
+cd cardano-node
+git fetch --all --recurse-submodules --tags
+git tag
+git checkout tags/<TAGGED VERSION>
+```
+
+### Set Build Options
+```
+# Set compiler version
+cabal configure --with-compiler=ghc-8.10.2
+
+# Update the local project file to use the VRF library that you installed earlier
+echo "package cardano-crypto-praos" >>  cabal.project.local
+echo "  flags: -external-libsodium-vrf" >>  cabal.project.local
+```
+
+### Build Binaries
+```
+cabal update
+cabal build all
+```
+
+### Install Binaries
+```
+cp -p "$(find dist-newstyle -type f -name cardano-node)" /usr/local/bin/
+cp -p "$(find dist-newstyle -type f -name cardano-cli)" /usr/local/bin/
+chmod 755 /usr/local/bin/cardano-*
+```
+
+### Cleanup
+```
+apt remove automake build-essential pkg-config libffi-dev libgmp-dev libssl-dev libtinfo-dev libsystemd-dev zlib1g-dev make g++ tmux jq wget libncursesw5 libtool autoconf libsodium-dev -y
+apt autoremove -y
+rm -rf ~/src
+```
+
+Cardano Notebook (c) by https://poweredbycrypto.com/[Powered By Crypto LLC], and other contributors.
+This document is licensed under a https://creativecommons.org/licenses/by-sa/4.0/[Creative Commons Attribution-ShareAlike 4.0 International Public License (CC BY-SA 4.0)].
